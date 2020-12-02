@@ -184,6 +184,7 @@ func NewDiscoveryServer(env *model.Environment, plugins []string, instanceID str
 	return out
 }
 
+// 挂载 ADS 到 GRPC 服务器
 // Register adds the ADS handler to the grpc server
 func (s *DiscoveryServer) Register(rpcs *grpc.Server) {
 	// Register v3 server
@@ -204,6 +205,7 @@ func (s *DiscoveryServer) IsServerReady() bool {
 	return s.serverReady.Load()
 }
 
+// 启动 DS 服务器
 func (s *DiscoveryServer) Start(stopCh <-chan struct{}) {
 	if s.InternalGen != nil {
 		s.InternalGen.Run(stopCh)

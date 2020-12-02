@@ -56,6 +56,8 @@ type caOptions struct {
 
 // Based on istio_ca main - removing creation of Secrets with private keys in all namespaces and install complexity.
 //
+// 兼容挂载名为 cacerts 的 secret
+// 但已经不使用
 // For backward compat, will preserve support for the "cacerts" Secret used for self-signed certificates.
 // It is mounted in the same location, and if found will be used - creating the secret is sufficient, no need for
 // extra options.
@@ -67,15 +69,18 @@ type caOptions struct {
 // Default config, for backward compat with Citadel:
 // - if "cacerts" secret exists in istio-system, will be mounted. It may contain an optional "root-cert.pem",
 // with additional roots and optional {ca-key, ca-cert, cert-chain}.pem user-provided root CA.
+// 使用 "istio-ca-secret" 来创建证书
 // - if user-provided root CA is not found, the Secret "istio-ca-secret" is used, with ca-cert.pem and ca-key.pem files.
 // - if neither is found, istio-ca-secret will be created.
 //
+// 兼容旧版本
 // - a config map "istio-security" with a "caTLSRootCert" file will be used for root cert, and created if needed.
 //   The config map was used by node agent - no longer possible to use in sds-agent, but we still save it for
 //   backward compat. Will be removed with the node-agent. sds-agent is calling NewCitadelClient directly, using
 //   K8S root.
 
 var (
+	// 挂载名为 cacerts 的 secret 的目录，Read-only
 	// LocalCertDir replaces the "cert-chain", "signing-cert" and "signing-key" flags in citadel - Istio installer is
 	// requires a secret named "cacerts" with specific files inside.
 	LocalCertDir = env.RegisterStringVar("ROOT_CA_DIR", "./etc/cacerts",
@@ -84,6 +89,7 @@ var (
 	useRemoteCerts = env.RegisterBoolVar("USE_REMOTE_CERTS", false,
 		"Whether to try to load CA certs from a remote Kubernetes cluster. Used for external Istiod.")
 
+	// 默认服务证书 TTL
 	workloadCertTTL = env.RegisterDurationVar("DEFAULT_WORKLOAD_CERT_TTL",
 		cmd.DefaultWorkloadCertTTL,
 		"The default TTL of issued workload certificates. Applied when the client sets a "+
@@ -93,6 +99,7 @@ var (
 		cmd.DefaultMaxWorkloadCertTTL,
 		"The max TTL of issued workload certificates.")
 
+	// 自签名 CA 证书 TTL
 	SelfSignedCACertTTL = env.RegisterDurationVar("CITADEL_SELF_SIGNED_CA_CERT_TTL",
 		cmd.DefaultSelfSignedCACertTTL,
 		"The TTL of self-signed CA root certificate.")
@@ -355,16 +362,19 @@ func (s *Server) createIstioCA(client corev1.CoreV1Interface, opts *caOptions) (
 	// If not found, will default to ca-cert.pem. May contain multiple roots.
 	rootCertFile := path.Join(LocalCertDir.Get(), "root-cert.pem")
 	if _, err := os.Stat(rootCertFile); err != nil {
+		// 兼容 Istio 获取 Root cert 证书
 		// In Citadel, normal self-signed doesn't use a root-cert.pem file for additional roots.
 		// In Istiod, it is possible to provide one via "cacerts" secret in both cases, for consistency.
 		rootCertFile = ""
 	}
 	if _, err := os.Stat(signingKeyFile); err != nil && client != nil {
+		// 在 K8S 集群中创建自签名证书
 		// The user-provided certs are missing - create a self-signed cert.
 		log.Info("Use self-signed certificate as the CA certificate")
 		// Abort after 20 minutes.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute*20)
 		defer cancel()
+		// 获取证书操作符
 		// rootCertFile will be added to "ca-cert.pem".
 		// readSigningCertOnly set to false - it doesn't seem to be used in Citadel, nor do we have a way
 		// to set it only for one job.

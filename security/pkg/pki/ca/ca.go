@@ -88,16 +88,22 @@ type IstioCAOptions struct {
 	RotatorConfig *SelfSignedCARootCertRotatorConfig
 }
 
+// K8S 集群内自签名证书
 // NewSelfSignedIstioCAOptions returns a new IstioCAOptions instance using self-signed certificate.
 func NewSelfSignedIstioCAOptions(ctx context.Context,
 	rootCertGracePeriodPercentile int, caCertTTL, rootCertCheckInverval, defaultCertTTL,
 	maxCertTTL time.Duration, org string, dualUse bool, namespace string,
 	readCertRetryInterval time.Duration, client corev1.CoreV1Interface,
 	rootCertFile string, enableJitter bool, caRSAKeySize int) (caOpts *IstioCAOptions, err error) {
+	// 如果证书不存在则创建证书
+	// 后续读取 secret 获取
 	// For the first time the CA is up, if readSigningCertOnly is unset,
 	// it generates a self-signed key/cert pair and write it to CASecret.
 	// For subsequent restart, CA will reads key/cert from CASecret.
+	// 获取 K8S istio-ca-secret secret 资源
 	caSecret, scrtErr := client.Secrets(namespace).Get(context.TODO(), CASecret, metav1.GetOptions{})
+	// 获取 secret 失败，尝试多次重新获取
+	// 若超时仍然获取不到，则创建自签名证书
 	if scrtErr != nil && readCertRetryInterval > time.Duration(0) {
 		pkiCaLog.Infof("Citadel in signing key/cert read only mode. Wait until secret %s:%s can be loaded...", namespace, CASecret)
 		ticker := time.NewTicker(readCertRetryInterval)
@@ -115,48 +121,54 @@ func NewSelfSignedIstioCAOptions(ctx context.Context,
 	}
 
 	caOpts = &IstioCAOptions{
-		CAType:         selfSignedCA,
+		CAType:         selfSignedCA, // 1 自签名证书 2 用户自定义证书
 		DefaultCertTTL: defaultCertTTL,
 		MaxCertTTL:     maxCertTTL,
+		// CA 轮转检查
 		RotatorConfig: &SelfSignedCARootCertRotatorConfig{
 			CheckInterval:      rootCertCheckInverval,
 			caCertTTL:          caCertTTL,
-			retryInterval:      cmd.ReadSigningCertRetryInterval,
-			retryMax:           cmd.ReadSigningCertRetryMax,
+			retryInterval:      cmd.ReadSigningCertRetryInterval, // 默认 5 秒
+			retryMax:           cmd.ReadSigningCertRetryMax, // 默认 30 秒
 			certInspector:      certutil.NewCertUtil(rootCertGracePeriodPercentile),
 			caStorageNamespace: namespace,
-			dualUse:            dualUse,
+			dualUse:            dualUse, // 默认 true
 			org:                org,
 			rootCertFile:       rootCertFile,
 			enableJitter:       enableJitter,
 			client:             client,
 		},
 	}
+	// 获取不到 secret，自签名创建
 	if scrtErr != nil {
 		pkiCaLog.Infof("Failed to get secret (error: %s), will create one", scrtErr)
 
 		options := util.CertOptions{
 			TTL:          caCertTTL,
 			Org:          org,
-			IsCA:         true,
+			IsCA:         true, // 证书标识为 CA
 			IsSelfSigned: true,
 			RSAKeySize:   caRSAKeySize,
-			IsDualUse:    dualUse,
+			// Whether this certificate is for dual-use clients (SAN+CN).
+			IsDualUse:    dualUse, // 这个选项其实没有用到
 		}
 		pemCert, pemKey, ckErr := util.GenCertKeyFromOptions(options)
 		if ckErr != nil {
 			return nil, fmt.Errorf("unable to generate CA cert and key for self-signed CA (%v)", ckErr)
 		}
 
+		// 获取 RootCertFile 加入根证书链
 		rootCerts, err := util.AppendRootCerts(pemCert, rootCertFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to append root certificates (%v)", err)
 		}
 
+		// 构建储存证书链的并发安全的数据结构体
 		if caOpts.KeyCertBundle, err = util.NewVerifiedKeyCertBundleFromPem(pemCert, pemKey, nil, rootCerts); err != nil {
 			return nil, fmt.Errorf("failed to create CA KeyCertBundle (%v)", err)
 		}
 
+		// 在 K8S 中创建 secret 储存证书
 		// Write the key/cert back to secret so they will be persistent when CA restarts.
 		secret := k8ssecret.BuildSecret("", CASecret, namespace, nil, nil, nil, pemCert, pemKey, istioCASecretType)
 		if _, err = client.Secrets(namespace).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
@@ -176,6 +188,7 @@ func NewSelfSignedIstioCAOptions(ctx context.Context,
 		}
 		pkiCaLog.Infof("Using existing public key: %v", string(rootCerts))
 	}
+	// 返回证书操作符
 	return caOpts, nil
 }
 

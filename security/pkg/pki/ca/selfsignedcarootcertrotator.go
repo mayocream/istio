@@ -110,6 +110,7 @@ func (rotator *SelfSignedCARootCertRotator) Run(stopCh chan struct{}) {
 // checkAndRotateRootCert decides whether root cert should be refreshed, and rotates
 // root cert for self-signed Citadel.
 func (rotator *SelfSignedCARootCertRotator) checkAndRotateRootCert() {
+	// 带失败重试获取 CA 证书的 K8S secret
 	caSecret, scrtErr := rotator.caSecretController.LoadCASecretWithRetry(CASecret,
 		rotator.config.caStorageNamespace, rotator.config.retryInterval, rotator.config.retryMax)
 
@@ -136,6 +137,7 @@ func (rotator *SelfSignedCARootCertRotator) checkAndRotateRootCertForSigningCert
 	if err == nil && waitTime > 0 {
 		rootCertRotatorLog.Info("Root cert is not about to expire, skipping root cert rotation.")
 		caCertInMem, _, _, _ := rotator.ca.GetCAKeyCertBundle().GetAllPem()
+		// 比较内存中的证书与 K8S 中的证书是否一致
 		// If CA certificate is different from the CA certificate in local key
 		// cert bundle, it implies that other Citadels have updated istio-ca-secret.
 		// Reload root certificate into key cert bundle.
@@ -147,6 +149,7 @@ func (rotator *SelfSignedCARootCertRotator) checkAndRotateRootCertForSigningCert
 				rootCertRotatorLog.Errorf("failed to append root certificates from file: %s", err.Error())
 				return
 			}
+			// 校验证书并将证书加载到内存中缓存
 			if err := rotator.ca.GetCAKeyCertBundle().VerifyAndSetAll(caSecret.Data[caCertID],
 				caSecret.Data[caPrivateKeyID], nil, rootCerts); err != nil {
 				rootCertRotatorLog.Errorf("failed to reload root cert into KeyCertBundle (%v)", err)
@@ -177,6 +180,7 @@ func (rotator *SelfSignedCARootCertRotator) checkAndRotateRootCertForSigningCert
 	// This is to make sure when rotate the root cert, we don't make unnecessary changes
 	// to the certificate or add extra fields to the certificate.
 	options = util.MergeCertOptions(options, oldCertOptions)
+	// 重新签发证书
 	pemCert, pemKey, ckErr := util.GenRootCertFromExistingKey(options)
 	if ckErr != nil {
 		rootCertRotatorLog.Errorf("unable to generate CA cert and key for self-signed CA: %s", ckErr.Error())
@@ -192,6 +196,7 @@ func (rotator *SelfSignedCARootCertRotator) checkAndRotateRootCertForSigningCert
 	oldCaCert := caSecret.Data[caCertID]
 	oldCaPrivateKey := caSecret.Data[caPrivateKeyID]
 	oldRootCerts := rotator.ca.GetCAKeyCertBundle().GetRootCertPem()
+	// 在 K8S 及内存中更新证书
 	if rollback, err := rotator.updateRootCertificate(caSecret, true, pemCert, pemKey, pemRootCerts); err != nil {
 		if !rollback {
 			rootCertRotatorLog.Errorf("Failed to roll forward root certificate (error: %s). "+

@@ -93,6 +93,7 @@ type CertOptions struct {
 	// If true, the private key is encoded with PKCS#8.
 	PKCS8Key bool
 
+	// 密钥生成算法
 	// The type of Elliptical Signature algorithm to use
 	// when generating private keys. Currently only ECDSA is supported.
 	// If empty, RSA is used, otherwise ECC is used.
@@ -106,6 +107,7 @@ func GenCertKeyFromOptions(options CertOptions) (pemCert []byte, pemKey []byte, 
 	// private key will be used to sign this certificate in the self-signed
 	// case, otherwise the certificate is signed by the signer private key
 	// as specified in the CertOptions.
+	// 默认忽略，使用 RSA 算法
 	if options.ECSigAlg != "" {
 		var ecPriv *ecdsa.PrivateKey
 
@@ -124,6 +126,7 @@ func GenCertKeyFromOptions(options CertOptions) (pemCert []byte, pemKey []byte, 
 	if options.RSAKeySize < minimumRsaKeySize {
 		return nil, nil, fmt.Errorf("requested key size does not meet the minimum requied size of %d (requested: %d)", minimumRsaKeySize, options.RSAKeySize)
 	}
+	// 生成 RSA 密钥
 	rsaPriv, err := rsa.GenerateKey(rand.Reader, options.RSAKeySize)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cert generation fails at RSA key generation (%v)", err)
@@ -131,7 +134,9 @@ func GenCertKeyFromOptions(options CertOptions) (pemCert []byte, pemKey []byte, 
 	return genCert(options, rsaPriv, &rsaPriv.PublicKey)
 }
 
+// 签名 X.509 证书
 func genCert(options CertOptions, priv interface{}, key interface{}) ([]byte, []byte, error) {
+	// 获取证书模板
 	template, err := genCertTemplateFromOptions(options)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cert generation fails at cert template creation (%v)", err)
@@ -320,6 +325,7 @@ func genCertTemplateFromOptions(options CertOptions) (*x509.Certificate, error) 
 		keyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
 	}
 
+	// 默认不启用此配置
 	extKeyUsages := []x509.ExtKeyUsage{}
 	if options.IsServer {
 		extKeyUsages = append(extKeyUsages, x509.ExtKeyUsageServerAuth)
@@ -342,13 +348,16 @@ func genCertTemplateFromOptions(options CertOptions) (*x509.Certificate, error) 
 		Organization: []string{options.Org},
 	}
 
+	// 填充扩展字段
 	exts := []pkix.Extension{}
 	if h := options.Host; len(h) > 0 {
+		// 生成 SAN
 		s, err := BuildSubjectAltNameExtension(h)
 		if err != nil {
 			return nil, err
 		}
 		if options.IsDualUse {
+			// 获取 common name
 			cn, err := DualUseCommonName(h)
 			if err != nil {
 				// log and continue

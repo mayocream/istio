@@ -119,6 +119,9 @@ func BuildSANExtension(identites []Identity) (*pkix.Extension, error) {
 		return nil, fmt.Errorf("failed to marshal the raw values for SAN field (err: %s)", err)
 	}
 
+
+	// 如果 subject 的信息仅存在于 subjectAltName 扩展中(仅于Email地址或URI相关)
+	// 则 subject name 必须为非空结构且 subjectAltName 扩展必须为 critical。
 	// SAN is Critical because the subject is empty. This is compliant with X.509 and SPIFFE standards.
 	return &pkix.Extension{Id: oidSubjectAlternativeName, Critical: true, Value: bs}, nil
 }

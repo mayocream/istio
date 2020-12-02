@@ -104,6 +104,7 @@ func GenCSRTemplate(options CertOptions) (*x509.CertificateRequest, error) {
 	return template, nil
 }
 
+// 获取 RootCertFile 加入证书链
 // AppendRootCerts appends root certificates in RootCertFile to the input certificate.
 func AppendRootCerts(pemCert []byte, rootCertFile string) ([]byte, error) {
 	var rootCerts []byte

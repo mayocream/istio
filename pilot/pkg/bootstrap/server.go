@@ -267,6 +267,7 @@ func NewServer(args *PilotArgs) (*Server, error) {
 		return nil, err
 	}
 
+	// 初始化加密 GRPC 服务器
 	// Secure gRPC Server must be initialized after CA is created as may use a Citadel generated cert.
 	if err := s.initSecureDiscoveryService(args); err != nil {
 		return nil, fmt.Errorf("error initializing secure gRPC Listener: %v", err)
@@ -289,8 +290,10 @@ func NewServer(args *PilotArgs) (*Server, error) {
 	// This should be called only after controllers are initialized.
 	s.initRegistryEventHandlers()
 
+	// 初始化 GRPC 服务器
 	s.initDiscoveryService(args)
 
+	// 初始化 SDS 服务器
 	s.initSDSServer(args)
 
 	// Notice that the order of authenticators matters, since at runtime
@@ -302,6 +305,7 @@ func NewServer(args *PilotArgs) (*Server, error) {
 		kubeauth.NewKubeJWTAuthenticator(s.kubeClient, s.clusterID, s.multicluster.GetRemoteKubeClient, spiffe.GetTrustDomain(), features.JwtPolicy.Get()),
 	}
 
+	// 默认启用
 	caOpts.Authenticators = authenticators
 	if features.XDSAuth {
 		s.XDSServer.Authenticators = authenticators
@@ -415,6 +419,7 @@ func (s *Server) WaitUntilCompletion() {
 	s.requiredTerminations.Wait()
 }
 
+
 // initSDSServer starts the SDS server
 func (s *Server) initSDSServer(args *PilotArgs) {
 	if s.kubeClient != nil {
@@ -422,6 +427,8 @@ func (s *Server) initSDSServer(args *PilotArgs) {
 			// Make sure we have security
 			log.Warnf("skipping Kubernetes credential reader; PILOT_ENABLE_XDS_IDENTITY_CHECK must be set to true for this feature.")
 		} else {
+			// 默认是 istio-system Namespace
+			// 管理 K8S 里面的 Secrets
 			sc := kubesecrets.NewMulticluster(s.kubeClient, s.clusterID, args.RegistryOptions.ClusterRegistriesNamespace)
 			sc.AddEventHandler(func(name, namespace string) {
 				s.XDSServer.ConfigUpdate(&model.PushRequest{
@@ -559,6 +566,8 @@ func (s *Server) initDiscoveryService(args *PilotArgs) {
 		return nil
 	})
 
+	// 创建 GRPC Server
+	// s.GrpcServer
 	s.initGrpcServer(args.KeepaliveOptions)
 
 	if args.ServerOptions.GRPCAddr != "" {
@@ -637,6 +646,7 @@ func (s *Server) initGrpcServer(options *istiokeepalive.Options) {
 	reflection.Register(s.grpcServer)
 }
 
+// 初始化安全 GRPC 服务器
 // initialize secureGRPCServer.
 func (s *Server) initSecureDiscoveryService(args *PilotArgs) error {
 	if args.ServerOptions.SecureGRPCAddr == "" {
@@ -653,7 +663,7 @@ func (s *Server) initSecureDiscoveryService(args *PilotArgs) error {
 
 	cfg := &tls.Config{
 		GetCertificate: s.getIstiodCertificate,
-		ClientAuth:     tls.VerifyClientCertIfGiven,
+		ClientAuth:     tls.VerifyClientCertIfGiven, // 如果客户端提供了证书，则用ClientCA来验证证书的有效性。 如果客户端没提供，则会继续处理请求。
 		ClientCAs:      s.peerCertVerifier.GetGeneralCertPool(),
 		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 			err := s.peerCertVerifier.VerifyPeerCert(rawCerts, verifiedChains)
@@ -679,8 +689,11 @@ func (s *Server) initSecureDiscoveryService(args *PilotArgs) error {
 	opts := s.grpcServerOptions(args.KeepaliveOptions)
 	opts = append(opts, grpc.Creds(tlsCreds))
 
+	// 开启 GRPC Server
 	s.secureGrpcServer = grpc.NewServer(opts...)
+	// 注册 XDS 的 ADS
 	s.XDSServer.Register(s.secureGrpcServer)
+	// 注册 GRPC 反射
 	reflection.Register(s.secureGrpcServer)
 
 	s.addStartFunc(func(stop <-chan struct{}) error {
@@ -694,6 +707,7 @@ func (s *Server) initSecureDiscoveryService(args *PilotArgs) error {
 	return nil
 }
 
+// GRPC 连接参数
 func (s *Server) grpcServerOptions(options *istiokeepalive.Options) []grpc.ServerOption {
 	interceptors := []grpc.UnaryServerInterceptor{
 		// setup server prometheus monitoring (as final interceptor in chain)
@@ -977,6 +991,7 @@ func (s *Server) setPeerCertVerifier(tlsOptions TLSOptions) error {
 	}
 
 	if len(rootCertBytes) != 0 {
+		// 添加 CA 证书加入 SPIFFE 信任域
 		err := s.peerCertVerifier.AddMappingFromPEM(spiffe.GetTrustDomain(), rootCertBytes)
 		if err != nil {
 			log.Errorf("Add Root CAs into peerCertVerifier failed: %v", err)
@@ -984,6 +999,7 @@ func (s *Server) setPeerCertVerifier(tlsOptions TLSOptions) error {
 		}
 	}
 
+	// 默认没有
 	if features.SpiffeBundleEndpoints != "" {
 		certMap, err := spiffe.RetrieveSpiffeBundleRootCertsFromStringInput(
 			features.SpiffeBundleEndpoints, []*x509.Certificate{})
@@ -1044,6 +1060,7 @@ func (s *Server) initJwtPolicy() {
 // maybeCreateCA creates and initializes CA Key if needed.
 func (s *Server) maybeCreateCA(caOpts *caOptions) error {
 	// CA signing certificate must be created only if CA is enabled.
+	// 默认启用
 	if s.EnableCA() {
 		log.Info("creating CA and initializing public key")
 		var err error
@@ -1051,6 +1068,7 @@ func (s *Server) maybeCreateCA(caOpts *caOptions) error {
 		if s.kubeClient != nil {
 			corev1 = s.kubeClient.CoreV1()
 		}
+		// 从远程 K8S 集群获取证书，默认不启用
 		if useRemoteCerts.Get() {
 			if err = s.loadRemoteCACerts(caOpts, LocalCertDir.Get()); err != nil {
 				return fmt.Errorf("failed to load remote CA certs: %v", err)
