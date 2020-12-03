@@ -255,6 +255,7 @@ func NewPluggedCertIstioCAOptions(certChainFile, signingCertFile, signingKeyFile
 	return caOpts, nil
 }
 
+// 实现了 security/pkg/server/ca/server.go CertificateAuthority 接口
 // IstioCA generates keys and certificates for Istio identities.
 type IstioCA struct {
 	defaultCertTTL time.Duration
@@ -279,6 +280,7 @@ func NewIstioCA(opts *IstioCAOptions) (*IstioCA, error) {
 		caRSAKeySize:  opts.CARSAKeySize,
 	}
 
+	// 启动 CA 证书轮转
 	if opts.CAType == selfSignedCA && opts.RotatorConfig.CheckInterval > time.Duration(0) {
 		ca.rootCertRotator = NewSelfSignedCARootCertRotator(opts.RotatorConfig, ca)
 	}

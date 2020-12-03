@@ -109,6 +109,7 @@ func (s *Server) initWorkloadSdsService(options *ca2.Options) error { //nolint: 
 	s.workloadSds.register(s.grpcWorkloadServer)
 
 	var err error
+	// Unix Domain Socket SDS 通信
 	s.grpcWorkloadListener, err = uds.NewListener(options.WorkloadUDSPath)
 	if err != nil {
 		sdsServiceLog.Errorf("Failed to set up UDS path: %v", err)

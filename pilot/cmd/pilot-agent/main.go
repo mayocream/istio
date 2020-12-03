@@ -294,6 +294,7 @@ var (
 				agentConfig.ProxyNamespace = podNamespace
 				agentConfig.ProxyDomain = role.DNSDomain
 			}
+			// Istio Agent 与 Discovery 通信
 			sa := istio_agent.NewAgent(&proxyConfig, agentConfig, secOpts)
 
 			var pilotSAN []string

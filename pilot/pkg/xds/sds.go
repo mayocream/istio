@@ -73,6 +73,7 @@ func parseResourceName(resource, defaultNamespace string) (SecretResource, error
 }
 
 func needsUpdate(proxy *model.Proxy, updates model.XdsUpdates) bool {
+	// 如果不是 gateway 则返回 false
 	if proxy.Type != model.Router {
 		return false
 	}
@@ -94,6 +95,7 @@ func (s *SecretGen) proxyAuthorizedForSecret(proxy *model.Proxy, sr SecretResour
 	return nil
 }
 
+// 与 Node Agent 也就是 Istio Proxy 进行通信返回的方法
 func (s *SecretGen) Generate(proxy *model.Proxy, _ *model.PushContext, w *model.WatchedResource, req *model.PushRequest) model.Resources {
 	if proxy.VerifiedIdentity == nil {
 		adsLog.Warnf("proxy %v is not authorized to receive secrets. Ensure you are connecting over TLS port and are authenticated.", proxy.ID)
@@ -104,10 +106,12 @@ func (s *SecretGen) Generate(proxy *model.Proxy, _ *model.PushContext, w *model.
 		adsLog.Warnf("proxy %v is from an unknown cluster, cannot retrieve certificates: %v", proxy.ID, err)
 		return nil
 	}
+	// 调用 K8S API Server 确认身份 SA 是否有权限访问 secrets
 	if err := secrets.Authorize(proxy.VerifiedIdentity.ServiceAccount, proxy.VerifiedIdentity.Namespace); err != nil {
 		adsLog.Warnf("proxy %v is not authorized to receive secrets: %v", proxy.ID, err)
 		return nil
 	}
+	// 如果不是 gateway 则返回 nil
 	if req == nil || !needsUpdate(proxy, req.ConfigsUpdated) {
 		return nil
 	}

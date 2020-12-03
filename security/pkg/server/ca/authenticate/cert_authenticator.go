@@ -27,6 +27,7 @@ import (
 const (
 	BearerTokenPrefix = "Bearer "
 
+	// 客户端证书认证
 	ClientCertAuthenticatorType = "ClientCertAuthenticator"
 )
 
@@ -52,11 +53,13 @@ func (cca *ClientCertAuthenticator) AuthenticatorType() string {
 // this method is called. In other words, this method does not do certificate
 // chain validation itself.
 func (cca *ClientCertAuthenticator) Authenticate(ctx context.Context) (*Caller, error) {
+	// 从 GRPC 连接获取 peer 信息
 	peer, ok := peer.FromContext(ctx)
 	if !ok || peer.AuthInfo == nil {
 		return nil, fmt.Errorf("no client certificate is presented")
 	}
 
+	// 连接必须为 TLS
 	if authType := peer.AuthInfo.AuthType(); authType != "tls" {
 		return nil, fmt.Errorf("unsupported auth type: %q", authType)
 	}
@@ -74,6 +77,6 @@ func (cca *ClientCertAuthenticator) Authenticate(ctx context.Context) (*Caller, 
 
 	return &Caller{
 		AuthSource: AuthSourceClientCertificate,
-		Identities: ids,
+		Identities: ids, // id 应该就是 SPIFFE ID
 	}, nil
 }

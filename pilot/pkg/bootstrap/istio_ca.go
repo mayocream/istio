@@ -169,6 +169,7 @@ func (s *Server) EnableCA() bool {
 	return true
 }
 
+// 在 GRPCS 服务器上开启 CA
 // RunCA will start the cert signing GRPC service on an existing server.
 // Protected by installer options: the CA will be started only if the JWT token in /var/run/secrets
 // is mounted. If it is missing - for example old versions of K8S that don't support such tokens -
@@ -182,11 +183,15 @@ func (s *Server) RunCA(grpc *grpc.Server, ca caserver.CertificateAuthority, opts
 		log.Warn("the CA to run is nil")
 		return
 	}
-	iss := trustedIssuer.Get()
-	aud := audience.Get()
+	iss := trustedIssuer.Get() // 默认为空
+	aud := audience.Get() // 默认为空
 
+	// 填充 iss 和 aud
+	// 默认获取 K8S SA Token
+	// "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	token, err := ioutil.ReadFile(s.jwtPath)
 	if err == nil {
+		// 获取 JWT Payload
 		tok, err := detectAuthEnv(string(token))
 		if err != nil {
 			log.Warn("Starting with invalid K8S JWT token", err, string(token))
@@ -203,6 +208,7 @@ func (s *Server) RunCA(grpc *grpc.Server, ca caserver.CertificateAuthority, opts
 	// The CA API uses cert with the max workload cert TTL.
 	// 'hostlist' must be non-empty - but is not used since a grpc server is passed.
 	// Adds client cert auth and kube (sds enabled)
+	// 创建给 Workload 颁发证书的 CA
 	caServer, startErr := caserver.New(ca, maxWorkloadCertTTL.Get(), opts.Authenticators)
 	if startErr != nil {
 		log.Fatalf("failed to create istio ca server: %v", startErr)
@@ -224,6 +230,7 @@ func (s *Server) RunCA(grpc *grpc.Server, ca caserver.CertificateAuthority, opts
 		}
 	}
 
+	// 注册 GRPC PB
 	caServer.Register(grpc)
 
 	log.Info("Istiod CA has started")

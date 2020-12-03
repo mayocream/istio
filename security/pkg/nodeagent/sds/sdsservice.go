@@ -132,6 +132,7 @@ type sdsservice struct {
 	credFetcher security.CredFetcher
 }
 
+// 实现 Envoy SDS API，负责接收 Discovery SDS 请求
 // newSDSService creates Secret Discovery Service which implements envoy SDS API.
 func newSDSService(st security.SecretManager,
 	secOpt *security.Options,
@@ -162,6 +163,7 @@ func (s *sdsservice) register(rpcs *grpc.Server) {
 	sds.RegisterSecretDiscoveryServiceServer(rpcs, s)
 }
 
+// 没实现增量更新
 func (s *sdsservice) DeltaSecrets(stream sds.SecretDiscoveryService_DeltaSecretsServer) error {
 	return status.Error(codes.Unimplemented, "DeltaSecrets not implemented")
 }

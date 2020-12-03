@@ -385,6 +385,7 @@ func (sa *Agent) newWorkloadSecretCache() (workloadSecretCache *cache.SecretCach
 			log.Warn("Debug mode or IP-secure network")
 		}
 		if tls {
+			// 获取 Istio CA 的证书，挂载的 Configmap
 			caCertFile := sa.FindRootCAForCA()
 			if rootCert, err = ioutil.ReadFile(caCertFile); err != nil {
 				log.Fatalf("invalid config - %s missing a root certificate %s", sa.secOpts.CAEndpoint, caCertFile)

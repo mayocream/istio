@@ -102,6 +102,7 @@ func NewController(
 	secretsInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(opts meta_v1.ListOptions) (runtime.Object, error) {
+				// 限定 Label 为 "istio/multiCluster=true"
 				opts.LabelSelector = MultiClusterSecretLabel + "=true"
 				return kubeclientset.CoreV1().Secrets(namespace).List(context.TODO(), opts)
 			},

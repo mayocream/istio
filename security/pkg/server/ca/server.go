@@ -70,9 +70,12 @@ func getConnectionAddress(ctx context.Context) string {
 // it is signed by the CA signing key.
 func (s *Server) CreateCertificate(ctx context.Context, request *pb.IstioCertificateRequest) (
 	*pb.IstioCertificateResponse, error) {
+	// metrics
 	s.monitoring.CSR.Increment()
+	// 从 GRPC CTX 获取 TLS Info 里面的 SPIFFE ID
 	caller := s.authenticate(ctx)
 	if caller == nil {
+		// 缺少 TLS Info 的客户端证书的 SAN URI 字段
 		s.monitoring.AuthnError.Increment()
 		return nil, status.Error(codes.Unauthenticated, "request authenticate failure")
 	}
@@ -89,6 +92,7 @@ func (s *Server) CreateCertificate(ctx context.Context, request *pb.IstioCertifi
 	}
 	respCertChain := []string{string(cert)}
 	if len(certChainBytes) != 0 {
+		// 加入证书链
 		respCertChain = append(respCertChain, string(certChainBytes))
 	}
 	respCertChain = append(respCertChain, string(rootCertBytes))
@@ -101,10 +105,12 @@ func (s *Server) CreateCertificate(ctx context.Context, request *pb.IstioCertifi
 }
 
 func recordCertsExpiry(keyCertBundle util.KeyCertBundle) {
+	// 获取跟证书过期时间戳
 	rootCertExpiry, err := keyCertBundle.ExtractRootCertExpiryTimestamp()
 	if err != nil {
 		serverCaLog.Errorf("failed to extract root cert expiry timestamp (error %v)", err)
 	}
+	// Metrics
 	rootCertExpiryTimestamp.Record(rootCertExpiry)
 
 	if len(keyCertBundle.GetCertChainPem()) == 0 {
@@ -133,6 +139,7 @@ func New(ca CertificateAuthority, ttl time.Duration,
 		Authenticators: authenticators,
 		serverCertTTL:  ttl,
 		ca:             ca,
+		// Metrics
 		monitoring:     newMonitoringMetrics(),
 	}
 	return server, nil

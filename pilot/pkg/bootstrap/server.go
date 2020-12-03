@@ -427,6 +427,7 @@ func (s *Server) initSDSServer(args *PilotArgs) {
 			// Make sure we have security
 			log.Warnf("skipping Kubernetes credential reader; PILOT_ENABLE_XDS_IDENTITY_CHECK must be set to true for this feature.")
 		} else {
+			// 启用 XDS Namespace 认证
 			// 默认是 istio-system Namespace
 			// 管理 K8S 里面的 Secrets
 			sc := kubesecrets.NewMulticluster(s.kubeClient, s.clusterID, args.RegistryOptions.ClusterRegistriesNamespace)
@@ -646,7 +647,7 @@ func (s *Server) initGrpcServer(options *istiokeepalive.Options) {
 	reflection.Register(s.grpcServer)
 }
 
-// 初始化安全 GRPC 服务器
+// 初始化 GRPCS 服务器
 // initialize secureGRPCServer.
 func (s *Server) initSecureDiscoveryService(args *PilotArgs) error {
 	if args.ServerOptions.SecureGRPCAddr == "" {
