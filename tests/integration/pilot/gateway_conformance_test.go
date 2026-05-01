@@ -87,13 +87,9 @@ var skippedTests = map[string]string{
 	"HTTPRouteCORS":                                   "TODO",
 	"HTTPRouteHTTPSListenerDetectMisdirectedRequests": "TODO",
 
-	"ListenerSetAllowedRoutesNamespaces":     "TODO",
-	"ListenerSetAllowedRoutesSupportedKinds": "TODO",
-	"ListenerSetDefaultNotAllowed":           "TODO",
-	"ListenerSetHostnameConflict":            "TODO",
-	"ListenerSetHTTPRouting":                 "TODO",
-	"ListenerSetProtocolConflict":            "TODO",
-	"ListenerSetReferenceGrant":              "TODO",
+	"ListenerSetHostnameConflict": "TODO",
+	"ListenerSetProtocolConflict": "TODO",
+	"ListenerSetReferenceGrant":   "TODO",
 
 	"MeshHTTPRoute303Redirect": "TODO",
 	"MeshHTTPRoute307Redirect": "TODO",
@@ -112,9 +108,13 @@ var agentgatewaySkippedTests = map[string]string{
 	"TLSRouteTerminateSimpleSameNamespace":  "TODO",
 	"TLSRouteMixedTerminationSameNamespace": "TODO",
 
-	"ListenerSetAllowedNamespaceNone":     "TODO",
-	"ListenerSetAllowedNamespaceSame":     "TODO",
-	"ListenerSetAllowedNamespaceSelector": "TODO",
+	"ListenerSetAllowedNamespaceNone":        "TODO",
+	"ListenerSetAllowedNamespaceSame":        "TODO",
+	"ListenerSetAllowedNamespaceSelector":    "TODO",
+	"ListenerSetAllowedRoutesNamespaces":     "TODO",
+	"ListenerSetAllowedRoutesSupportedKinds": "TODO",
+	"ListenerSetDefaultNotAllowed":           "TODO",
+	"ListenerSetHTTPRouting":                 "TODO",
 }
 
 func TestGatewayConformance(t *testing.T) {
